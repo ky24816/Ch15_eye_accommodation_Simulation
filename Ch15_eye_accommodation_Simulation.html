@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Eye Accommodation">
+<title>Eye Accommodation Simulation – Ciliary Muscle, Suspensory Ligaments &amp; Lens</title>
+<style>
+  :root {
+    --primary: #1a365d;
+    --accent: #2b6cb0;
+    --bg: #f7fafc;
+    --card: #ffffff;
+    --text: #2d3748;
+    --muted: #718096;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    padding: 16px;
+    max-width: 1080px;
+    margin: 0 auto;
+  }
+  header { text-align: center; margin-bottom: 16px; }
+  h1 { font-size: 1.4rem; color: var(--primary); margin-bottom: 4px; }
+  .subtitle { color: var(--muted); font-size: 0.92rem; }
+  .main-card {
+    background: var(--card);
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.07);
+    padding: 16px 16px 20px;
+    margin-bottom: 16px;
+  }
+  #canvas-container {
+    background: #edf2f7;
+    border-radius: 8px;
+    padding: 8px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: center;
+    touch-action: none;
+  }
+  canvas { max-width: 100%; height: auto; border-radius: 6px; cursor: grab; }
+  canvas.dragging { cursor: grabbing; }
+  .hint {
+    text-align: center;
+    font-size: 0.88rem;
+    color: var(--accent);
+    font-weight: 600;
+    margin: 2px 0 12px;
+  }
+  label { display: block; font-weight: 600; margin-bottom: 8px; color: var(--primary); }
+  input[type="range"] {
+    width: 100%;
+    height: 12px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: #cbd5e0;
+    border-radius: 6px;
+    outline: none;
+    touch-action: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 32px;
+    height: 32px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+    border: 3px solid white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+  .slider-value { text-align: center; font-size: 1.05rem; font-weight: 700; color: var(--accent); margin-top: 6px; }
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin: 14px 0;
+  }
+  .metric-card {
+    background: #edf2f7;
+    border-radius: 8px;
+    padding: 10px 8px;
+    text-align: center;
+  }
+  .metric-label { font-size: 0.78rem; color: var(--muted); margin-bottom: 2px; }
+  .metric-value { font-size: 1.12rem; font-weight: 700; color: var(--primary); }
+  .metric-unit { font-size: 0.8rem; font-weight: 500; color: var(--muted); }
+  .explanation {
+    background: #ebf8ff;
+    border-left: 4px solid var(--accent);
+    padding: 12px 14px;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.93rem;
+  }
+  .explanation strong { color: var(--primary); }
+  .key-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    margin-top: 12px;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+  footer { text-align: center; font-size: 0.82rem; color: var(--muted); margin-top: 10px; }
+  @media (max-width: 700px) {
+    .metrics { grid-template-columns: 1fr; }
+    h1 { font-size: 1.22rem; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Interactive Simulation of Eye Accommodation</h1>
+  <p class="subtitle">Left: front view of the ciliary ring and suspensory ligaments &nbsp;·&nbsp; Right: one cross-section of the eye with light rays</p>
+</header>
+
+<div class="main-card">
+  <div id="canvas-container">
+    <canvas id="eyeCanvas" width="960" height="500"></canvas>
+  </div>
+  <p class="hint">Drag the ciliary ring (left) or a ciliary body (right) · or use the slider</p>
+
+  <label for="contractionSlider">Ciliary muscle contraction</label>
+  <input type="range" id="contractionSlider" min="0" max="100" value="0" step="1">
+  <div class="slider-value" id="sliderValue">0% — fully relaxed · distant vision</div>
+
+  <div class="metrics">
+    <div class="metric-card">
+      <div class="metric-label">Suspensory ligaments</div>
+      <div class="metric-value"><span id="tensionValue">Tight</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Lens axial thickness</div>
+      <div class="metric-value"><span id="thicknessValue">3.60</span> <span class="metric-unit">mm</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Relative lens power</div>
+      <div class="metric-value"><span id="powerValue">+20.0</span> <span class="metric-unit">D</span></div>
+    </div>
+  </div>
+
+  <div class="explanation" id="explanationBox"></div>
+  <div class="key-row">
+    <span>Red fibres = tight (stretched) suspensory ligaments</span>
+    <span>Green wavy fibres = slack (loosened) suspensory ligaments</span>
+  </div>
+</div>
+
+<footer>
+  Educational model based on the Helmholtz theory of accommodation. The two panels show the same eye from different angles. Structures are simplified and not to scale.
+</footer>
+
+<script>
+(function () {
+  const canvas = document.getElementById('eyeCanvas');
+  const ctx = canvas.getContext('2d');
+  const slider = document.getElementById('contractionSlider');
+  const sliderValueEl = document.getElementById('sliderValue');
+  const thicknessEl = document.getElementById('thicknessValue');
+  const powerEl = document.getElementById('powerValue');
+  const tensionEl = document.getElementById('tensionValue');
+  const explanationEl = document.getElementById('explanationBox');
+
+  const MIN_THICKNESS = 3.60;
+  const MAX_THICKNESS = 4.80;
+  const BASE_POWER = 20.0;
+  const MAX_POWER_GAIN = 10.0;
+
+  let contraction = 0;
+  let dragging = null;
+
+  const F = { cx: 228, cy: 268, rMax: 148, rMin: 118 };
+  const SX = 700;
+  const SY = 268;
+  const SR = 142;
+
+  function ciliaryRadius(c) {
+    return F.rMax - c * (F.rMax - F.rMin);
+  }
+
+  function sideLayout(c) {
+    const lensX = SX - SR + 70;
+    const lensHalfW = 14 - c * 3;
+    const lensHalfH = 24 + c * 18;
+    const cilX = lensX + 4 - c * 6;
+    const cilOffset = 68 - c * 20;
+    const retinaX = SX + SR - 8;
+    const pupilX = SX - SR + 46;
+    return { lensX, lensHalfW, lensHalfH, cilX, cilOffset, retinaX, pupilX };
+  }
+
+  function setContraction(c) {
+    contraction = Math.max(0, Math.min(1, c));
+    slider.value = String(Math.round(contraction * 100));
+    draw();
+  }
+
+  function canvasPoint(evt) {
+    const rect = canvas.getBoundingClientRect();
+    const src = evt.touches ? evt.touches[0] : evt;
+    return {
+      x: (src.clientX - rect.left) * (canvas.width / rect.width),
+      y: (src.clientY - rect.top) * (canvas.height / rect.height)
+    };
+  }
+
+  function hitTarget(p) {
+    const r = ciliaryRadius(contraction);
+    const dRing = Math.hypot(p.x - F.cx, p.y - F.cy);
+    if (p.x < 456 && (Math.abs(dRing - r) < 34 || (dRing < r && dRing > r * 0.55))) return 'ring';
+    const L = sideLayout(contraction);
+    const upper = { x: L.cilX, y: SY - L.cilOffset };
+    const lower = { x: L.cilX, y: SY + L.cilOffset };
+    if (Math.hypot(p.x - upper.x, p.y - upper.y) < 26) return 'upper';
+    if (Math.hypot(p.x - lower.x, p.y - lower.y) < 26) return 'lower';
+    return null;
+  }
+
+  function contractionFromPointer(p, which) {
+    if (which === 'ring') {
+      const dist = Math.hypot(p.x - F.cx, p.y - F.cy);
+      return (F.rMax - dist) / (F.rMax - F.rMin);
+    }
+    const L0 = sideLayout(0);
+    const L1 = sideLayout(1);
+    const y = which === 'upper' ? (SY - p.y) : (p.y - SY);
+    return (L0.cilOffset - y) / (L0.cilOffset - L1.cilOffset);
+  }
+
+  function drawWavy(x1, y1, x2, y2, slack, waves) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len;
+    const ny = dx / len;
+    const amp = slack * Math.min(15, len * 0.2);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    const steps = 16;
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      const wave = Math.sin(t * Math.PI * waves) * amp;
+      const sag = Math.sin(t * Math.PI) * amp * 0.65;
+      ctx.lineTo(x1 + dx * t + nx * (wave + sag), y1 + dy * t + ny * (wave + sag));
+    }
+    ctx.stroke();
+  }
+
+  function labelLeader(ax, ay, lx, ly, lines, color, align) {
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(lx, ly);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.1;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(ax, ay, 2.4, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    const arr = Array.isArray(lines) ? lines : [lines];
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = align || 'left';
+    ctx.textBaseline = 'middle';
+    arr.forEach((line, i) => {
+      const ty = ly + i * 14;
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = 'rgba(237,242,247,0.95)';
+      ctx.strokeText(line, lx, ty);
+      ctx.fillStyle = color;
+      ctx.fillText(line, lx, ty);
+    });
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  function draw() {
+    const c = contraction;
+    const slack = c;
+    const tension = 1 - c;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#edf2f7';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#cbd5e0';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(456, 16);
+    ctx.lineTo(456, 484);
+    ctx.stroke();
+    drawFront(c, slack, tension);
+    drawSide(c, slack, tension);
+    updateReadout();
+  }
+
+  function drawFront(c, slack, tension) {
+    const rCil = ciliaryRadius(c);
+    ctx.fillStyle = '#1a365d';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Front view', F.cx, 20);
+
+    ctx.beginPath();
+    ctx.arc(F.cx, F.cy, rCil + 26, 0, Math.PI * 2);
+    ctx.strokeStyle = '#cbd5e0';
+    ctx.lineWidth = 10;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(F.cx, F.cy, rCil, 0, Math.PI * 2);
+    ctx.strokeStyle = '#2c5282';
+    ctx.lineWidth = 16;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(F.cx, F.cy, rCil - 10, 0, Math.PI * 2);
+    ctx.strokeStyle = '#4a5568';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    [-Math.PI / 2, Math.PI / 2].forEach((ang) => {
+      const hx = F.cx + Math.cos(ang) * rCil;
+      const hy = F.cy + Math.sin(ang) * rCil;
+      ctx.beginPath();
+      ctx.arc(hx, hy, 8, 0, Math.PI * 2);
+      ctx.fillStyle = '#2b6cb0';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    });
+
+    ctx.fillStyle = c > 0.5 ? '#2f855a' : '#c53030';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(c > 0.5 ? 'ring smaller (contracted)' : 'ring larger (relaxed)', F.cx, F.cy + rCil + 28);
+
+    const eqR = 76 - c * 16;
+    const axR = 34 + c * 22;
+    ctx.beginPath();
+    ctx.ellipse(F.cx, F.cy, eqR, axR, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(190, 227, 248, 0.9)';
+    ctx.fill();
+    ctx.strokeStyle = '#2b6cb0';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.fillStyle = '#2b6cb0';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillText('Lens', F.cx, F.cy + 5);
+
+    ctx.lineCap = 'round';
+    const n = 16;
+    for (let i = 0; i < n; i++) {
+      const ang = (i / n) * Math.PI * 2;
+      const ox = F.cx + Math.cos(ang) * (rCil - 9);
+      const oy = F.cy + Math.sin(ang) * (rCil - 9);
+      const ix = F.cx + Math.cos(ang) * eqR;
+      const iy = F.cy + Math.sin(ang) * axR * 0.92;
+      ctx.strokeStyle = tension > 0.45
+        ? 'rgba(197,48,48,' + (0.4 + tension * 0.55) + ')'
+        : 'rgba(47,133,90,' + (0.5 + slack * 0.35) + ')';
+      ctx.lineWidth = 1.1 + tension * 2.3;
+      if (slack < 0.12) {
+        ctx.beginPath();
+        ctx.moveTo(ox, oy);
+        ctx.lineTo(ix, iy);
+        ctx.stroke();
+      } else {
+        drawWavy(ox, oy, ix, iy, slack, 2.2);
+      }
+    }
+
+    // Labels parked outside the ring, with leaders
+    const ligAng = Math.PI * 0.18;
+    const ligAx = F.cx + Math.cos(ligAng) * ((rCil - 9 + eqR) / 2);
+    const ligAy = F.cy + Math.sin(ligAng) * ((rCil - 9 + axR * 0.92) / 2);
+    labelLeader(ligAx, ligAy, 438, 48, ['Suspensory', 'ligaments'], tension > 0.45 ? '#c53030' : '#2f855a', 'right');
+
+    const cilAx = F.cx + Math.cos(-Math.PI * 0.72) * rCil;
+    const cilAy = F.cy + Math.sin(-Math.PI * 0.72) * rCil;
+    labelLeader(cilAx, cilAy, 14, 48, ['Ciliary body'], '#2c5282', 'left');
+
+    ctx.fillStyle = tension > 0.55 ? '#c53030' : (tension > 0.3 ? '#d69e2e' : '#2f855a');
+    ctx.font = 'bold 13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(
+      tension > 0.7 ? 'Ligaments TIGHT' :
+      tension > 0.3 ? 'Ligaments loosening' :
+      'Ligaments SLACK',
+      F.cx, F.cy + rCil + 46
+    );
+  }
+
+  function drawSide(c, slack, tension) {
+    const L = sideLayout(c);
+    ctx.fillStyle = '#1a365d';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Side view (same eye)', SX + 20, 20);
+
+    ctx.beginPath();
+    ctx.arc(SX, SY, SR, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.strokeStyle = '#4a5568';
+    ctx.lineWidth = 3.5;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(SX, SY, SR - 6, -1.05, 1.05);
+    ctx.strokeStyle = '#c53030';
+    ctx.lineWidth = 7;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.ellipse(SX - SR + 20, SY, 28, 56, 0, Math.PI * 0.5, Math.PI * 1.5);
+    ctx.fillStyle = 'rgba(190, 227, 248, 0.45)';
+    ctx.fill();
+    ctx.strokeStyle = '#2b6cb0';
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+
+    const irisFront = L.pupilX - 4;
+    const pupilHalf = 18;
+    ctx.fillStyle = '#9b2c2c';
+    ctx.beginPath();
+    ctx.moveTo(irisFront, SY - 54);
+    ctx.lineTo(irisFront + 16, SY - pupilHalf);
+    ctx.lineTo(irisFront + 6, SY - pupilHalf);
+    ctx.lineTo(irisFront - 4, SY - 60);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(irisFront, SY + 54);
+    ctx.lineTo(irisFront + 16, SY + pupilHalf);
+    ctx.lineTo(irisFront + 6, SY + pupilHalf);
+    ctx.lineTo(irisFront - 4, SY + 60);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.ellipse(L.lensX, SY, L.lensHalfW, L.lensHalfH, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(190, 227, 248, 0.95)';
+    ctx.fill();
+    ctx.strokeStyle = '#2b6cb0';
+    ctx.lineWidth = 2.6;
+    ctx.stroke();
+
+    const upperCil = { x: L.cilX, y: SY - L.cilOffset };
+    const lowerCil = { x: L.cilX, y: SY + L.cilOffset };
+    function drawCil(p) {
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y, 18, 13, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#2c5282';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+      ctx.fillStyle = '#2b6cb0';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    drawCil(upperCil);
+    drawCil(lowerCil);
+
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 3; i++) {
+      const u1x = upperCil.x - 4 + i * 3;
+      const u1y = upperCil.y + 8;
+      const u2x = L.lensX + (i - 1) * 4;
+      const u2y = SY - L.lensHalfH + 2;
+      const l1x = lowerCil.x - 4 + i * 3;
+      const l1y = lowerCil.y - 8;
+      const l2x = L.lensX + (i - 1) * 4;
+      const l2y = SY + L.lensHalfH - 2;
+      ctx.strokeStyle = tension > 0.45
+        ? 'rgba(197,48,48,' + (0.45 + tension * 0.5) + ')'
+        : 'rgba(47,133,90,' + (0.5 + slack * 0.35) + ')';
+      ctx.lineWidth = 1.1 + tension * 2;
+      if (slack < 0.12) {
+        ctx.beginPath(); ctx.moveTo(u1x, u1y); ctx.lineTo(u2x, u2y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(l1x, l1y); ctx.lineTo(l2x, l2y); ctx.stroke();
+      } else {
+        drawWavy(u1x, u1y, u2x, u2y, slack, 2);
+        drawWavy(l1x, l1y, l2x, l2y, slack, 2);
+      }
+    }
+
+    const startX = 478;
+    const offsets = [-24, -8, 8, 24];
+    const diverge = 0.12 + c * 0.9;
+    ctx.strokeStyle = '#3182ce';
+    ctx.lineWidth = 2;
+    offsets.forEach((off) => {
+      const y0 = SY + off * 0.22;
+      const yCornea = SY + off * (0.26 + diverge * 0.48);
+      ctx.beginPath();
+      ctx.moveTo(startX, y0);
+      ctx.lineTo(SX - SR + 6, yCornea);
+      ctx.lineTo(L.lensX, SY + off * 0.14);
+      ctx.lineTo(L.retinaX, SY);
+      ctx.stroke();
+    });
+    ctx.beginPath();
+    ctx.arc(L.retinaX, SY, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#2f855a';
+    ctx.fill();
+
+    ctx.fillStyle = '#2b6cb0';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.strokeText('Lens', L.lensX, SY);
+    ctx.fillText('Lens', L.lensX, SY);
+    ctx.textBaseline = 'alphabetic';
+
+    labelLeader(SX - SR + 18, SY - 50, 470, 86, 'Cornea', '#2b6cb0', 'left');
+    labelLeader(irisFront + 8, SY - pupilHalf - 2, 520, 58, 'Iris', '#9b2c2c', 'left');
+    labelLeader(upperCil.x + 8, upperCil.y - 6, SX + 36, 58, 'Ciliary body', '#2c5282', 'left');
+    labelLeader(
+      (upperCil.x + L.lensX) / 2,
+      (upperCil.y + 8 + SY - L.lensHalfH + 2) / 2,
+      SX - 20,
+      SY + SR + 22,
+      'Suspensory ligaments',
+      tension > 0.45 ? '#c53030' : '#2f855a',
+      'center'
+    );
+    labelLeader(L.retinaX - 4, SY - 18, SX + SR + 8, SY - 40, 'Retina', '#c53030', 'left');
+
+    ctx.fillStyle = '#2f855a';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Focus on retina', L.retinaX - 6, SY + 28);
+
+    ctx.fillStyle = '#1a365d';
+    ctx.textAlign = 'left';
+    ctx.font = '11px sans-serif';
+    if (c < 0.2) {
+      ctx.fillText('Distant object', 470, SY + 92);
+      ctx.fillText('(almost parallel rays)', 470, SY + 106);
+    } else if (c > 0.75) {
+      ctx.fillText('Near object', 470, SY + 92);
+      ctx.fillText('(diverging rays)', 470, SY + 106);
+    } else {
+      ctx.fillText('Object coming nearer', 470, SY + 92);
+    }
+  }
+
+  function updateReadout() {
+    const c = contraction;
+    thicknessEl.textContent = (MIN_THICKNESS + (MAX_THICKNESS - MIN_THICKNESS) * c).toFixed(2);
+    powerEl.textContent = '+' + (BASE_POWER + MAX_POWER_GAIN * c).toFixed(1);
+    if (c < 0.2) tensionEl.textContent = 'Tight';
+    else if (c < 0.6) tensionEl.textContent = 'Loosening';
+    else tensionEl.textContent = 'Slack';
+    if (c < 0.12) sliderValueEl.textContent = Math.round(c * 100) + '% — fully relaxed · distant vision';
+    else if (c > 0.88) sliderValueEl.textContent = Math.round(c * 100) + '% — fully contracted · near vision';
+    else sliderValueEl.textContent = Math.round(c * 100) + '% contracted';
+
+    if (c < 0.2) {
+      explanationEl.innerHTML =
+        '<strong>Distant vision.</strong> The ciliary muscle is <strong>relaxed</strong>, so the ring is wide. The suspensory ligaments are <strong>tight</strong> and pull the lens equator outwards. The elastic lens is held <strong>thin and flat</strong> (lower power). Almost <strong>parallel</strong> rays from a distant object meet on the retina.';
+    } else if (c < 0.6) {
+      explanationEl.innerHTML =
+        '<strong>Switching towards near vision.</strong> The ciliary muscle is <strong>contracting</strong> and the ring moves inward. Tension in the suspensory ligaments falls and the fibres begin to look <strong>slack and wavy</strong>. The lens recoils into a thicker, more curved shape and its power rises.';
+    } else {
+      explanationEl.innerHTML =
+        '<strong>Near vision.</strong> Strong ciliary contraction has moved the ring inward and <strong>released</strong> the suspensory ligaments. The ligaments now look <strong>slack</strong>. The elastic lens springs into a <strong>thicker, more spherical</strong> shape (higher power). Rays from a nearby object arrive <strong>diverging</strong>; the extra power brings them onto the retina.';
+    }
+  }
+
+  slider.addEventListener('input', function () {
+    contraction = parseFloat(slider.value) / 100;
+    draw();
+  });
+
+  function onDown(evt) {
+    const p = canvasPoint(evt);
+    const hit = hitTarget(p);
+    if (hit) {
+      dragging = hit;
+      canvas.classList.add('dragging');
+      setContraction(contractionFromPointer(p, hit));
+      evt.preventDefault();
+    }
+  }
+  function onMove(evt) {
+    if (!dragging) return;
+    const p = canvasPoint(evt);
+    setContraction(contractionFromPointer(p, dragging));
+    evt.preventDefault();
+  }
+  function onUp() {
+    dragging = null;
+    canvas.classList.remove('dragging');
+  }
+
+  canvas.addEventListener('mousedown', onDown);
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+  canvas.addEventListener('touchstart', onDown, { passive: false });
+  window.addEventListener('touchmove', onMove, { passive: false });
+  window.addEventListener('touchend', onUp);
+
+  draw();
+})();
+</script>
+</body>
+</html>
